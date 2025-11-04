@@ -17,7 +17,7 @@ from fb_login import main as fb_login
 PROFILE_URL = "https://www.facebook.com/BeingSalmanKhan"
 OUTPUT_DIR = "facebook_data"
 MAX_POSTS_TO_SCRAPE = 50
-    SCROLL_PAUSE_TIME = 10
+SCROLL_PAUSE_TIME = 10
 # ----------------------------------------
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)

@@ -1,4 +1,8 @@
-import configuration as cf
+try:
+    import configuration as cf
+except Exception:
+    cf = None
+    print("[!] Warning: 'configuration' module not found. Some helper functions may be unavailable.")
 import pandas as pd
 import numpy as np
 import json
@@ -9,14 +13,25 @@ import time
 from io import StringIO
 import os
 
-
-
+# Optional: use fb_login.py for a consistent login flow if available
+try:
+    from fb_login import main as fb_login_main
+    FB_LOGIN_AVAILABLE = True
+except Exception:
+    fb_login_main = None
+    FB_LOGIN_AVAILABLE = False
 
 def crawl(driver, url, username, password, threshold, ite):
 
     driver.get(url)
     # Login Facebook
-    cf.login_facebook(username, password, driver)
+    if cf is not None:
+        cf.login_facebook(username, password, driver)
+    elif FB_LOGIN_AVAILABLE:
+        # assume driver already logged in via fb_login_main if caller used it
+        pass
+    else:
+        print("[!] No login helper available (configuration or fb_login). Proceeding without explicit login.")
     if cf.scroll_and_click_button(driver):
       cf.click_showed_type_btn(driver, "All comments")
 
@@ -62,7 +77,12 @@ def crawl_page_top_comments(driver, page_url, username, password, comments_per_p
     from configuration.action import open_comments_popup_for_visible_post, get_comments_from_popup, close_comments_popup
 
     driver.get(page_url)
-    cf.login_facebook(username, password, driver)
+    if cf is not None:
+        cf.login_facebook(username, password, driver)
+    elif FB_LOGIN_AVAILABLE:
+        pass
+    else:
+        print("[!] No login helper available (configuration or fb_login). Proceeding without explicit login.")
 
     results = []
     visited = 0
@@ -102,7 +122,12 @@ def crawl_profile_top_posts(driver, profile_url, username, password, max_posts=1
     '''Open a profile/page and collect top post permalinks and snippets.'''
     from configuration.action import scroll_profile_collect_post_urls
     driver.get(profile_url)
-    cf.login_facebook(username, password, driver)
+    if cf is not None:
+        cf.login_facebook(username, password, driver)
+    elif FB_LOGIN_AVAILABLE:
+        pass
+    else:
+        print("[!] No login helper available (configuration or fb_login). Proceeding without explicit login.")
     posts = scroll_profile_collect_post_urls(driver, max_posts=max_posts)
     return posts
 
@@ -111,7 +136,12 @@ def crawl_profile_posts_comments(driver, profile_url, username, password, posts_
     from configuration.action import find_visible_posts, scrape_comments_for_article
 
     driver.get(profile_url)
-    cf.login_facebook(username, password, driver)
+    if cf is not None:
+        cf.login_facebook(username, password, driver)
+    elif FB_LOGIN_AVAILABLE:
+        pass
+    else:
+        print("[!] No login helper available (configuration or fb_login). Proceeding without explicit login.")
 
     gathered = []
     visited = 0
