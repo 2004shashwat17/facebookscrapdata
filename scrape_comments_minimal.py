@@ -164,8 +164,13 @@ def scrape_post_comments(driver, post_url, max_comments=500):
 
 
 def close_modal(driver):
+    """Attempt to close an open modal/dialog for the post view.
+
+    Returns True if a close action was performed, False otherwise.
+    """
+    from selenium.webdriver.common.keys import Keys
     try:
-        # try find close button inside dialog
+        close_btn = None
         try:
             close_btn = driver.find_element(By.XPATH, "//div[@role='dialog']//div[@aria-label='Close']")
         except Exception:
@@ -182,11 +187,14 @@ def close_modal(driver):
             except Exception:
                 pass
 
-        # fallback: send ESCAPE
-        from selenium.webdriver.common.keys import Keys
-        driver.find_element(By.TAG_NAME, 'body').send_keys(Keys.ESCAPE)
-        time.sleep(0.4)
-        return True
+        # fallback: send ESCAPE to body
+        try:
+            body = driver.find_element(By.TAG_NAME, 'body')
+            body.send_keys(Keys.ESCAPE)
+            time.sleep(0.4)
+            return True
+        except Exception:
+            return False
     except Exception:
         return False
 
