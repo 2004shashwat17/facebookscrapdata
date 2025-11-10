@@ -1,5 +1,6 @@
 import os
 import time
+import hashlib
 import csv
 from urllib.parse import urlparse, urlunparse
 from datetime import datetime
@@ -14,6 +15,9 @@ except Exception:
     fb_login_main = None
     FB_LOGIN_AVAILABLE = False
 
+# Default profile to avoid entering URL repeatedly
+DEFAULT_PROFILE = 'https://www.facebook.com/BeingSalmanKhan'
+
 
 def manual_login_fallback():
     from selenium.webdriver.chrome.options import Options
@@ -25,7 +29,7 @@ def manual_login_fallback():
     return driver
 
 
-def collect_posts_on_profile(driver, profile_url, max_posts=10, max_scrolls=40, pause=1.5):
+def collect_posts_on_profile(driver, profile_url, max_posts=10, max_scrolls=200, pause=1.5):
     """Two-phase collection:
 
     1) Slowly scroll the profile and gather post permalinks (canonicalized).
@@ -120,7 +124,10 @@ def collect_posts_on_profile(driver, profile_url, max_posts=10, max_scrolls=40, 
                     except Exception:
                         pass
 
-                uid = post_url
+                # defer uid creation until after we extract caption/images so
+                # we can build a more robust identifier (avoid skipping posts
+                # that have no visible caption or no permalink).
+                # uid will be computed below.
 
                 # NOTE: per user request, do NOT click anything (no 'See more').
                 # Only extract the visible caption text and image srcs as-is.
@@ -168,11 +175,28 @@ def collect_posts_on_profile(driver, profile_url, max_posts=10, max_scrolls=40, 
                 except Exception:
                     images = []
 
-                # build unique id and dedupe
-                if not uid:
-                    uid = (caption_text[:200] if caption_text else None)
-                if not uid:
+                # build unique id and dedupe (robust)
+                unique_raw = ''
+                if post_url:
+                    unique_raw = post_url
+                elif caption_text:
+                    unique_raw = caption_text[:400]
+                else:
+                    # try data-ft or element attributes, else fall back to outerHTML
+                    unique_raw = (p.get_attribute('data-ft') or '')
+                    if not unique_raw:
+                        unique_raw = (p.get_attribute('id') or '')
+                    if not unique_raw:
+                        unique_raw = (p.get_attribute('data-testid') or '')
+                    if not unique_raw:
+                        outer = p.get_attribute('outerHTML') or ''
+                        unique_raw = outer[:2000]
+
+                if not unique_raw:
+                    # last resort: skip this post if we truly cannot identify it
                     continue
+
+                uid = hashlib.sha1(unique_raw.encode('utf-8')).hexdigest()
                 if uid in seen:
                     continue
                 seen.add(uid)
@@ -239,7 +263,6 @@ def save_posts_csv(posts, filename='scrap.post.csv'):
 
 
 def main():
-    print('ScrapPost: extract posts (text + image srcs) from a profile')
     driver = None
     try:
         if FB_LOGIN_AVAILABLE:
@@ -254,7 +277,7 @@ def main():
 
         profile = input('Enter the profile URL (or press Enter for default): ').strip()
         if not profile:
-            profile = 'https://www.facebook.com/deepakmalik.monro'
+            profile = DEFAULT_PROFILE
 
         try:
             n = int(input('How many posts to scrape? [default 5]: ').strip() or '5')
@@ -262,9 +285,9 @@ def main():
             n = 5
 
         posts = collect_posts_on_profile(driver, profile, max_posts=n)
-        print(f'Collected {len(posts)} posts')
         out = save_posts_csv(posts, 'scrap.post.csv')
-        print('Saved posts to', out)
+        # Minimal output: only show saved CSV path
+        print(out)
 
     finally:
         try:
