@@ -197,11 +197,13 @@ def collect_posts_on_profile(driver, profile_url, max_posts=10, max_scrolls=200,
                     continue
 
                 uid = hashlib.sha1(unique_raw.encode('utf-8')).hexdigest()
+                # signature: short, human-readable snippet from unique_raw used to re-find the card
+                sig = (unique_raw[:400]).strip()
                 if uid in seen:
                     continue
                 seen.add(uid)
 
-                collected.append({'post_url': post_url or '', 'caption': caption_text, 'images': images})
+                collected.append({'post_url': post_url or '', 'caption': caption_text, 'images': images, 'uid': uid, 'signature': sig})
                 time.sleep(0.25)
 
             except InvalidSessionIdException:

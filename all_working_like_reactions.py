@@ -41,7 +41,7 @@ def extract_names_from_popup(driver):
         name_elements = driver.find_elements(
             By.XPATH,
             '//a[starts-with(@href, "https://www.facebook.com/") and @role="link" and normalize-space(text()) != ""]'
-        /)
+        )
         for a in name_elements:
             try:
                 name = a.text.strip()
@@ -247,8 +247,8 @@ def main():
     driver = login()
     if driver:
         try:
-            profile_url = "https://www.facebook.com/aayanasingh143"
-            output_file = "shashwatsaxena.csv"
+            profile_url = "https://www.facebook.com/profile.php?id=100064151734126"
+            output_file = "dhdsdhest.csv"
             print(f"🎯 Starting scraping for: {profile_url}")
             scrape_reactions(driver, profile_url, output_file)
         except Exception as e:
