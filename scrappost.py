@@ -1,7 +1,9 @@
 import os
+import sys
 import time
 import hashlib
 import csv
+import argparse
 from urllib.parse import urlparse, urlunparse
 from datetime import datetime
 from selenium import webdriver
@@ -16,7 +18,143 @@ except Exception:
     FB_LOGIN_AVAILABLE = False
 
 # Default profile to avoid entering URL repeatedly
-DEFAULT_PROFILE = 'https://www.facebook.com/BeingSalmanKhan'
+DEFAULT_PROFILE = 'https://www.facebook.com/PizzaPizzaCanada'
+
+
+def setup_argument_parser():
+    """Set up command-line argument parser."""
+    parser = argparse.ArgumentParser(
+        description='Scrape Facebook post content - URLs, captions, images',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s --profile https://www.facebook.com/BeingSalmanKhan --posts 15
+  %(prog)s --profile https://www.facebook.com/PizzaPizzaCanada --posts 100 --output my_posts.csv
+  %(prog)s  # Uses default profile and interactive prompts
+        """
+    )
+    
+    parser.add_argument(
+        '--profile', '-p',
+        type=str,
+        help=f'Facebook profile URL to scrape (default: {DEFAULT_PROFILE})'
+    )
+    
+    parser.add_argument(
+        '--posts', '-n',
+        type=int,
+        help='Number of posts to scrape (default: 100)'
+    )
+    
+    parser.add_argument(
+        '--output', '-o',
+        type=str,
+        default='scrap.post.csv',
+        help='Output CSV filename (default: scrap.post.csv)'
+    )
+    
+    return parser
+
+
+def validate_facebook_url(url):
+    """Validate and normalize Facebook profile URL."""
+    if not url or not url.strip():
+        return None
+        
+    url = url.strip()
+    
+    # Add https:// if missing
+    if not url.startswith(('http://', 'https://')):
+        url = 'https://' + url
+    
+    # Parse and validate URL
+    try:
+        parsed = urlparse(url)
+        if 'facebook.com' not in parsed.netloc.lower():
+            raise ValueError("URL must be a Facebook profile")
+        
+        # Normalize URL
+        normalized = urlunparse((
+            'https',
+            'www.facebook.com',
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
+        
+        return normalized
+    except Exception as e:
+        raise ValueError(f"Invalid Facebook URL: {e}")
+
+
+def confirm_scraping_parameters(profile_url, num_posts, output_file):
+    """Display scraping parameters and get user confirmation."""
+    print("\n" + "="*60)
+    print("FACEBOOK POST SCRAPER - CONFIGURATION")
+    print("="*60)
+    print(f"Profile URL: {profile_url}")
+    print(f"Posts to scrape: {num_posts}")
+    print(f"Output file: {output_file}")
+    print("="*60)
+    
+    while True:
+        choice = input("\nProceed with scraping? (y/n): ").strip().lower()
+        if choice in ['y', 'yes']:
+            return True
+        elif choice in ['n', 'no']:
+            print("Scraping cancelled.")
+            return False
+        else:
+            print("Please enter 'y' for yes or 'n' for no.")
+
+
+def get_scraping_parameters():
+    """Get scraping parameters from command line or interactive input."""
+    parser = setup_argument_parser()
+    args = parser.parse_args()
+    
+    # Determine profile URL
+    if args.profile:
+        try:
+            profile_url = validate_facebook_url(args.profile)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+    else:
+        # Interactive mode for profile
+        profile = input(f'Enter the profile URL (or press Enter for default {DEFAULT_PROFILE}): ').strip()
+        if not profile:
+            profile_url = DEFAULT_PROFILE
+        else:
+            try:
+                profile_url = validate_facebook_url(profile)
+            except ValueError as e:
+                print(f"Error: {e}")
+                sys.exit(1)
+    
+    # Determine number of posts
+    if args.posts:
+        num_posts = args.posts
+        if num_posts <= 0:
+            print("Error: Number of posts must be positive")
+            sys.exit(1)
+    else:
+        # Interactive mode for posts
+        try:
+            user_input = input('How many posts to scrape? [default 100]: ').strip()
+            num_posts = int(user_input) if user_input else 100
+            if num_posts <= 0:
+                print("Error: Number of posts must be positive")
+                sys.exit(1)
+        except ValueError:
+            print("Error: Invalid number of posts")
+            sys.exit(1)
+    
+    # Output file
+    output_file = args.output
+    
+    return profile_url, num_posts, output_file
 
 
 def manual_login_fallback():
@@ -265,36 +403,50 @@ def save_posts_csv(posts, filename='scrap.post.csv'):
 
 
 def main():
+    """Main function to run the Facebook post scraper."""
     driver = None
     try:
+        # Get scraping parameters
+        profile_url, num_posts, output_file = get_scraping_parameters()
+        
+        # Confirm parameters with user
+        if not confirm_scraping_parameters(profile_url, num_posts, output_file):
+            sys.exit(0)
+        
+        # Initialize WebDriver
         if FB_LOGIN_AVAILABLE:
             try:
                 driver = fb_login_main()
+                print("\n✓ Facebook login successful")
             except Exception as e:
-                print('fb_login failed:', e)
+                print(f'\n⚠ fb_login failed: {e}')
                 driver = None
 
         if driver is None:
+            print("\n→ Using manual login fallback...")
             driver = manual_login_fallback()
 
-        profile = input('Enter the profile URL (or press Enter for default): ').strip()
-        if not profile:
-            profile = DEFAULT_PROFILE
+        print(f"\n→ Starting to scrape {num_posts} posts from profile...")
+        posts = collect_posts_on_profile(driver, profile_url, max_posts=num_posts)
+        
+        print(f"→ Saving {len(posts)} posts to CSV...")
+        out_path = save_posts_csv(posts, output_file)
+        
+        print(f"\n✓ Scraping completed successfully!")
+        print(f"✓ Posts saved to: {out_path}")
+        print(f"✓ Total posts scraped: {len(posts)}")
 
-        try:
-            n = int(input('How many posts to scrape? [default 5]: ').strip() or '5')
-        except Exception:
-            n = 5
-
-        posts = collect_posts_on_profile(driver, profile, max_posts=n)
-        out = save_posts_csv(posts, 'scrap.post.csv')
-        # Minimal output: only show saved CSV path
-        print(out)
-
+    except KeyboardInterrupt:
+        print("\n\n⚠ Scraping interrupted by user")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Error during scraping: {e}")
+        sys.exit(1)
     finally:
         try:
             if driver:
                 driver.quit()
+                print("→ Browser closed")
         except Exception:
             pass
 

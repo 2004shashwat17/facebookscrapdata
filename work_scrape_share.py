@@ -16,10 +16,10 @@ from selenium.common.exceptions import (
 from fb_login import main as fb_login
 
 # ---------------- CONFIG ----------------
-PROFILE_URL = "https://www.facebook.com/profile.php?id=100064151734126"
+PROFILE_URL = "https://www.facebook.com/PizzaPizzaCanada"
 OUTPUT_DIR = "facebook_data"
-MAX_POSTS_TO_SCRAPE = 3
-SCROLL_PAUSE_TIME = 10
+MAX_POSTS_TO_SCRAPE = 30
+SCROLL_PAUSE_TIME = 8
 # ----------------------------------------
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -90,7 +90,7 @@ def scrape_shares_dialog(driver, post_number):
             continue
 
     if not scrollable_container:
-        print("⚠ No scrollable div found — using popup as fallback.")
+        print("⚠️ No scrollable div found — using popup as fallback.")
         scrollable_container = popup
 
     last_height = 0
@@ -118,7 +118,7 @@ def scrape_shares_dialog(driver, post_number):
                 if not name:
                     continue
 
-                # ✂ Filter out junk
+                # ✂️ Filter out junk
                 if not any(c.isalpha() for c in name):
                     continue
                 if len(name) > 100 or len(name) < 2:
@@ -141,7 +141,7 @@ def scrape_shares_dialog(driver, post_number):
         new_height = driver.execute_script("return arguments[0].scrollHeight;", scrollable_container)
         if new_height == last_height:
             same_height_count += 1
-            print(f"⏸ No scroll height change ({same_height_count}/3)")
+            print(f"⏸️ No scroll height change ({same_height_count}/3)")
             # 🟡 Trigger light reverse scroll to force load
             driver.execute_script("arguments[0].scrollBy(0, -400);", scrollable_container)
             time.sleep(2.5)
