@@ -1,0 +1,40 @@
+# Large CSV files (over 100MB)
+facebook_data/combined_20251120_145157.csv
+
+# General patterns for large files
+*.csv
+facebook_data/*.csv
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+
+# Browser profiles and cache
+chromedriver.log
+selenium-screenshots/
