@@ -37,29 +37,94 @@ def clean_name(name):
 # ============================================================
 # BS4 PARSER
 # ============================================================
-def extract_names_bs4(popup_html):
-    soup = BeautifulSoup(popup_html, "html.parser")
+def extract_names_direct_selenium(driver, popup_element):
+    """Extract names using direct Selenium approach like comment scraping"""
     reactors = []
-
-    for a in soup.find_all("a", href=True):
-        name = a.get_text(strip=True)
-        link = a["href"]
-
-        if not name or len(name) < 2:
-            continue
-
-        if not any(x in link for x in ["/profile.php?id=", "facebook.com/"]):
-            continue
-
-        if any(x in link for x in ["/pages/", "/groups/", "/events/", "/stories/",
-                                   "/photo/", "/video/"]):
-            continue
-
-        if not clean_name(name):
-            continue
-
-        reactors.append({"name": name, "link": link})
-
+    print("🎯 Using direct Selenium extraction (comment scraping style)...")
+    
+    try:
+        # Find all possible name containers using various strategies
+        print("📝 Strategy 1: Looking for profile links...")
+        profile_links = popup_element.find_elements(By.XPATH, ".//a[contains(@href, 'facebook.com')]")
+        print(f"Found {len(profile_links)} profile links")
+        
+        for i, link in enumerate(profile_links):
+            try:
+                href = link.get_attribute('href') or ''
+                name = link.text.strip()
+                print(f"        Link {i+1}: '{name}' -> {href[:50]}...")
+                
+                if name and len(name) >= 2 and clean_name(name):
+                    if not any(r['name'] == name for r in reactors):
+                        reactors.append({"name": name, "link": href})
+                        print(f"        👤 EXTRACTED: {name}")
+            except Exception as e:
+                print(f"        ❌ Error with link {i+1}: {e}")
+                continue
+        
+        # Strategy 2: Look for clickable elements that might contain names
+        print("📝 Strategy 2: Looking for clickable name elements...")
+        clickable_elements = popup_element.find_elements(By.XPATH, ".//div[@role='button'] | .//span[@role='button'] | .//div[contains(@style,'cursor')]")
+        print(f"Found {len(clickable_elements)} clickable elements")
+        
+        for i, element in enumerate(clickable_elements):
+            try:
+                name = element.text.strip()
+                print(f"        Clickable {i+1}: '{name}' (length: {len(name)})")
+                
+                if name and len(name) >= 2 and len(name) <= 100:
+                    # Try to find associated link
+                    try:
+                        parent_link = element.find_element(By.XPATH, "./ancestor::a[1] | ./descendant::a[1]")
+                        href = parent_link.get_attribute('href') or ''
+                    except:
+                        href = ''
+                    
+                    if clean_name(name):
+                        if not any(r['name'] == name for r in reactors):
+                            reactors.append({"name": name, "link": href})
+                            print(f"        👤 EXTRACTED: {name}")
+            except Exception as e:
+                print(f"        ❌ Error with clickable {i+1}: {e}")
+                continue
+        
+        # Strategy 3: Look for all text elements and extract names
+        print("📝 Strategy 3: Looking for all text spans...")
+        text_elements = popup_element.find_elements(By.XPATH, ".//span | .//div")
+        print(f"Found {len(text_elements)} text elements")
+        
+        for i, element in enumerate(text_elements):
+            try:
+                name = element.text.strip()
+                if name and len(name) >= 2 and len(name) <= 50:  # Reasonable name length
+                    # Skip if it looks like UI text
+                    if any(word in name.lower() for word in ['react', 'like', 'love', 'angry', 'sad', 'wow', 'haha', 'care']):
+                        continue
+                    
+                    # Try to find associated link
+                    try:
+                        parent_link = element.find_element(By.XPATH, "./ancestor::a[1]")
+                        href = parent_link.get_attribute('href') or ''
+                    except:
+                        href = ''
+                    
+                    if clean_name(name):
+                        if not any(r['name'] == name for r in reactors):
+                            reactors.append({"name": name, "link": href})
+                            print(f"        👤 EXTRACTED: {name}")
+                            
+                            # Limit to avoid too much output
+                            if len(reactors) >= 20:
+                                print("        🛑 Reached extraction limit for this round")
+                                break
+                                
+            except Exception:
+                continue
+                
+    except Exception as e:
+        print(f"❌ Error in direct Selenium extraction: {e}")
+    
+    print(f"✅ Total unique names extracted: {len(reactors)}")
     return reactors
 
 
@@ -80,9 +145,12 @@ def scroll_popup_and_extract(driver, popup):
     prev_count = 0
     no_change = 0
     loops = 0
+    
+    print(f"🎯 Starting extraction from popup...")
 
     while True:
         loops += 1
+        print(f"📜 Scroll #{loops}")
         pyautogui.scroll(random.randint(-340, -200))
         time.sleep(random.uniform(1.8, 2.8))
 
@@ -92,31 +160,37 @@ def scroll_popup_and_extract(driver, popup):
             print("⚠️ Popup vanished.")
             break
 
-        html = popup.get_attribute("outerHTML")
-        names = extract_names_bs4(html)
+        # Use direct Selenium extraction instead of BS4
+        names = extract_names_direct_selenium(driver, popup)
+        print(f"👥 Found {len(names)} names this round")
 
         for p in names:
             seen.add(f"{p['name']}|{p['link']}")
+            
+        print(f"📊 Total unique seen so far: {len(seen)}")
 
         if len(seen) == prev_count:
             no_change += 1
             if no_change >= 4:
+                print("🛑 No new names found, stopping scroll")
                 break
         else:
             no_change = 0
             prev_count = len(seen)
 
         if loops >= 200:
+            print("🛑 Max scroll loops reached")
             break
 
-    # Final parsing
+    # Final extraction using direct Selenium
     try:
         popup = driver.find_element(By.XPATH, '//div[@role="dialog"]')
-        html = popup.get_attribute("outerHTML")
-        final = extract_names_bs4(html)
-    except:
+        final = extract_names_direct_selenium(driver, popup)
+    except Exception as e:
+        print(f"⚠️ Final parsing failed: {e}")
         final = []
 
+    # Remove duplicates
     unique = []
     stored = set()
     for p in final:

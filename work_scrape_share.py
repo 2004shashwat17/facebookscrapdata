@@ -11,7 +11,7 @@ from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
-    TimeoutException, NoSuchElementException, StaleElementReferenceException
+    TimeoutException, NoSuchElementException, StaleElementReferenceException, NoSuchWindowException
 )
 from fb_login import main as fb_login
 
@@ -197,7 +197,7 @@ def process_post(driver, post, index):
         sharers = scrape_shares_dialog(driver, index)
         return sharers
 
-    except (StaleElementReferenceException, NoSuchElementException):
+    except (StaleElementReferenceException, NoSuchElementException, NoSuchWindowException):
         print("[-] Post became stale or disappeared, skipping...")
         return []
     except Exception as e:
@@ -222,7 +222,20 @@ def scrape_facebook_shares():
 
         for post in posts:
             # Use part of HTML as unique signature
-            post_id = hash(post.get_attribute("innerHTML")[:400])
+            try:
+                post_id = hash(post.get_attribute("innerHTML")[:400])
+            except NoSuchWindowException:
+                # Browser window closed unexpectedly — save progress and exit gracefully
+                print("[-] Browser window closed unexpectedly while reading posts. Saving progress and exiting.")
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                csv_path = os.path.join(OUTPUT_DIR, f"facebook_shares_partial_{timestamp}.csv")
+                pd.DataFrame(all_shares).to_csv(csv_path, index=False, encoding="utf-8-sig")
+                print(f"[+] Saved partial results to {csv_path}")
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
+                return
             if post_id in processed_posts:
                 continue
 
